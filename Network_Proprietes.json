@@ -1,0 +1,5 @@
+{
+    "Data Set": "london_weather",
+    "Layers": [1,1,1],
+    "Batch Size": 10
+}

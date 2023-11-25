@@ -1,5 +1,10 @@
 {
     "Data Set": "london_weather",
-    "Layers": [1,1,1],
-    "Batch Size": 10
+    "Layers": [4,2],
+    "Input": 8,
+    "Batch Size": 30,
+    "Generations": 1,
+    "Intensity": 0.1,
+    "Drop colunms": ["date"],
+    "Output": "precipitation"
 }

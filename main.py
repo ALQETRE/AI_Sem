@@ -34,7 +34,7 @@ class Layer:
         self.biases = pd.DataFrame(np.zeros((1, num_neurons)))
         self.hidden = hidden
 
-    def forward(self, input, answers= [], learn= False):
+    def forward(self, input, answers= pd.Series(), learn= False):
         self.output = (self.weights.transpose()).dot(input.transpose())
         self.output = self.output.transpose() + (self.biases.values.tolist()[0])
         if self.hidden:
@@ -47,8 +47,7 @@ class Layer:
                 avg = self.output[pd.get_dummies(answers.transpose())].transpose().max().mean()
                 self.output = 1 - avg
             elif not answers.empty:
-                self.output = self.output.max(axis= 1) == self.output[pd.get_dummies(answers.transpose())].transpose().max()
-
+                self.output = self.output.max(axis= 1) == self.output[pd.get_dummies(answers.transpose())].transpose().max(axis= 0)
 
     def update(self):
         self.weights += pd.DataFrame(np.random.randn(self.weights.shape[0], self.weights.shape[1]) * proprietes["Intensity"])
@@ -99,18 +98,40 @@ def learn():
     generations = proprietes["Generations"]
     batch_count = math.floor(data_set.shape[1] / proprietes["Batch Size"])
     lowest_loss = 1
+    latest_test = test()
     pbar = tqdm(desc="Processing dataset", colour='#0997FF', total= (generations * (batch_count - proprietes["Test batch count"])))
     for generation in range(generations):
         for batch in range(batch_count - proprietes["Test batch count"]):
-            pbar.desc = f"Processing dataset (Loss: {round(lowest_loss, 6)}, Gen: {generation}/{generations})"
+            pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generation}/{generations}, Latest test: {latest_test}%)"
             pbar.update(1)
             save_layers()
             loss = run_batch(batch, batch_count, lowest_loss)
+
             if loss is not None:
                 lowest_loss = loss
                 load_layers()
-    pbar.desc = f"Processing dataset (Loss: {round(lowest_loss, 6)}, Gen: {generations}/{generations})"
-    return lowest_loss
+
+            if round(lowest_loss, 8) == 0:                
+                pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generation}/{generations}, Latest test: {test()}%)"
+                pbar = None
+
+                print(f"We reached loss = 0. So the learning proccess doesn't need to continue. (We were on gen: {generation+1}/{generations}. and on batch {batch+1}/{batch_count - proprietes['Test batch count']}.)")
+                
+                print("\n")
+                return latest_test
+            
+            elif proprietes["Test frequency (0 => Every gen.)"] == 0:
+                if batch == 0:
+                    latest_test = test()
+                    pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generation}/{generations}, Latest test: {latest_test}%)"
+
+            elif ((generation+1)*batch) % proprietes["Test frequency (0 => Every gen.)"] == 0:
+                latest_test = test()
+                pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generation}/{generations}, Latest test: {latest_test}%)"
+
+    latest_test = test()
+    pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generations}/{generations}, Latest test: {latest_test}%)"
+    return latest_test
 
 def test():
     batch_count = math.floor(data_set.shape[1] / proprietes["Batch Size"])
@@ -118,8 +139,10 @@ def test():
     X = data_set.transpose().loc[(data_set.transpose().index % batch_count) >= batch_count - proprietes["Test batch count"] ].copy()
     X.reset_index(inplace= True, drop= True)
 
-    y = answers.loc[(answers.index % batch_count) >= batch_count - proprietes["Test batch count"]].copy()
+    y = answers.loc[(answers.index % batch_count) >= (batch_count - proprietes["Test batch count"])].copy()
     y.reset_index(inplace= True, drop= True)
+
+    final = 0
 
     output = []
     for layer in layers:
@@ -132,13 +155,14 @@ def test():
             output = layer.output
         else:
             layer.forward(output, y)
-            output = layer.output
-            return output.sum()/output.size
+            final = layer.output
+
+            final = final.sum()/final.size
+    
+    return final*100
 
 
 get_proprietes()
 get_dataset()
 init_layers()
 learn()
-#test()
-print(test())

@@ -1,12 +1,13 @@
 {
     "Data Set": "london_weather",
     "Data set size (0 => all)": 0,
-    "Layers": [3, 2],
+    "Layers": [4, 2],
     "Input": 8,
-    "Batch Size": 20,
-    "Generations": 3,
-    "Intensity": 0.1,
+    "Batch Size": 16,
+    "Generations": 5,
+    "Intensity": 0.05,
     "Drop colunms": ["date"],
     "Output": "precipitation",
-    "Test batch count": 100
+    "Test batch count": 200,
+    "Test frequency (0 => Every gen.)": 500
 }

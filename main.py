@@ -6,7 +6,7 @@ e = math.exp(1)
 
 proprietes = {}
 data_set = pd.DataFrame()
-ansers = pd.Series()
+answers = pd.Series()
 
 def get_proprietes():
     global proprietes
@@ -15,14 +15,14 @@ def get_proprietes():
     proprietes = loads(proprietes)
     
 def get_dataset():
-    global ansers
+    global answers
     global data_set
     data_set = pd.read_csv(proprietes["Data Set"] + ".csv")
     if not proprietes["Data set size (0 => all)"] == 0:
         data_set = data_set.head(proprietes["Data set size (0 => all)"])
     data_set.drop(columns= proprietes["Drop colunms"], inplace= True)
-    ansers = data_set[proprietes["Output"]].copy()
-    ansers = np.ceil(ansers.clip(0, 1))
+    answers = data_set[proprietes["Output"]].copy()
+    answers = np.ceil(answers.clip(0, 1))
     data_set.drop(columns= proprietes["Output"], inplace= True)
     data_set.reset_index(inplace= True, drop= True)
     data_set = data_set.transpose()
@@ -34,18 +34,21 @@ class Layer:
         self.biases = pd.DataFrame(np.zeros((1, num_neurons)))
         self.hidden = hidden
 
-    def forward(self, input, ansers= [], learn= False):
+    def forward(self, input, answers= [], learn= False):
         self.output = (self.weights.transpose()).dot(input.transpose())
         self.output = self.output.transpose() + (self.biases.values.tolist()[0])
         if self.hidden:
             self.output.clip(0, inplace= True)
         else:
             self.output = self.output.transpose()
-            self.output = e ** (self.output.transpose() - self.output.max(axis= 1)).transpose()
-            self.output = (self.output.transpose() / self.output.sum(axis= 1))
-            if learn:
-                avg = self.output[pd.get_dummies(ansers.transpose())].transpose().max().mean()
+            self.output = e ** (self.output.transpose() - self.output.max(axis= 1))
+            self.output = (self.output.transpose() / self.output.sum(axis= 1)).T
+            if learn and not answers.empty:
+                avg = self.output[pd.get_dummies(answers.transpose())].transpose().max().mean()
                 self.output = 1 - avg
+            elif not answers.empty:
+                self.output = self.output.max(axis= 1) == self.output[pd.get_dummies(answers.transpose())].transpose().max()
+
 
     def update(self):
         self.weights += pd.DataFrame(np.random.randn(self.weights.shape[0], self.weights.shape[1]) * proprietes["Intensity"])
@@ -72,7 +75,7 @@ def load_layers():
     
 def run_batch(batch_num, batch_count, lowest_loss):
     X = data_set.transpose().loc[(data_set.transpose().index % batch_count) == batch_num].copy()
-    y = ansers.loc[(ansers.index % batch_count) == batch_num].copy()
+    y = answers.loc[(answers.index % batch_count) == batch_num].copy()
     X.reset_index(inplace= True, drop= True)
     y.reset_index(inplace= True, drop= True)
     output = []
@@ -85,7 +88,7 @@ def run_batch(batch_num, batch_count, lowest_loss):
             layer.forward(output)
             output = layer.output
         else:
-            layer.forward(output, ansers= y, learn= True)
+            layer.forward(output, answers= y, learn= True)
             if layer.output >= lowest_loss:
                 layer.update()
                 return None
@@ -95,10 +98,10 @@ def run_batch(batch_num, batch_count, lowest_loss):
 def learn():
     generations = proprietes["Generations"]
     batch_count = math.floor(data_set.shape[1] / proprietes["Batch Size"])
-    lowest_loss = 99999
-    pbar = tqdm(desc="Processing dataset", colour='#0997FF', total= generations * batch_count)
+    lowest_loss = 1
+    pbar = tqdm(desc="Processing dataset", colour='#0997FF', total= (generations * (batch_count - proprietes["Test batch count"])))
     for generation in range(generations):
-        for batch in range(batch_count):
+        for batch in range(batch_count - proprietes["Test batch count"]):
             pbar.desc = f"Processing dataset (Loss: {round(lowest_loss, 6)}, Gen: {generation}/{generations})"
             pbar.update(1)
             save_layers()
@@ -108,8 +111,34 @@ def learn():
                 load_layers()
     pbar.desc = f"Processing dataset (Loss: {round(lowest_loss, 6)}, Gen: {generations}/{generations})"
     return lowest_loss
-                
+
+def test():
+    batch_count = math.floor(data_set.shape[1] / proprietes["Batch Size"])
+
+    X = data_set.transpose().loc[(data_set.transpose().index % batch_count) >= batch_count - proprietes["Test batch count"] ].copy()
+    X.reset_index(inplace= True, drop= True)
+
+    y = answers.loc[(answers.index % batch_count) >= batch_count - proprietes["Test batch count"]].copy()
+    y.reset_index(inplace= True, drop= True)
+
+    output = []
+    for layer in layers:
+        idx = layers.index(layer)
+        if idx == 0:
+            layer.forward(X)
+            output = layer.output
+        elif not idx+1 == len(layers):
+            layer.forward(output)
+            output = layer.output
+        else:
+            layer.forward(output, y)
+            output = layer.output
+            return output.sum()/output.size
+
+
 get_proprietes()
 get_dataset()
 init_layers()
 learn()
+#test()
+print(test())

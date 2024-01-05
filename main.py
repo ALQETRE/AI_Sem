@@ -44,10 +44,9 @@ class Layer:
             self.output = e ** (self.output.transpose() - self.output.max(axis= 1))
             self.output = (self.output.transpose() / self.output.sum(axis= 1)).T
             if learn and not answers.empty:
-                avg = self.output[pd.get_dummies(answers.transpose())].transpose().max().mean()
-                self.output = 1 - avg
+                self.output = self.output[pd.get_dummies(answers.transpose())].transpose().max().mean()
             elif not answers.empty:
-                self.output = self.output.max(axis= 1) == self.output[pd.get_dummies(answers.transpose())].transpose().max(axis= 0)
+                self.output = self.output.max(axis= 1) != self.output[pd.get_dummies(answers.transpose())].transpose().max(axis= 0)
 
     def update(self):
         self.weights += pd.DataFrame(np.random.randn(self.weights.shape[0], self.weights.shape[1]) * proprietes["Intensity"])
@@ -111,11 +110,11 @@ def learn():
                 lowest_loss = loss
                 load_layers()
 
-            if round(lowest_loss, 8) == 0:                
+            if round(lowest_loss, 8) == 100000:                
                 pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generation}/{generations}, Latest test: {test()}%)"
                 pbar = None
 
-                print(f"We reached loss = 0. So the learning proccess doesn't need to continue. (We were on gen: {generation+1}/{generations}. and on batch {batch+1}/{batch_count - proprietes['Test batch count']}.)")
+                print(f"We reached loss = 0.0 So the learning proccess doesn't need to continue. (We were on gen: {generation+1}/{generations}. and on batch {batch+1}/{batch_count - proprietes['Test batch count']}.)")
                 
                 print("\n")
                 return latest_test

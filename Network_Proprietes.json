@@ -3,11 +3,11 @@
     "Data set size (0 => all)": 0,
     "Layers": [4, 2],
     "Input": 8,
-    "Batch Size": 16,
-    "Generations": 5,
-    "Intensity": 0.05,
+    "Batch Size": 25,
+    "Generations": 3,
+    "Intensity": 0.08,
     "Drop colunms": ["date"],
     "Output": "precipitation",
-    "Test batch count": 200,
-    "Test frequency (0 => Every gen.)": 500
+    "Test batch count": 50,
+    "Test frequency (0 => Every gen.)": 20
 }

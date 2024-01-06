@@ -1,12 +1,19 @@
-import pandas as pd, numpy as np, math
+import pandas as pd, numpy as np, math, matplotlib.pyplot as plt
 from json import loads, dumps
 from tqdm import tqdm
 
-e = math.exp(1)
+def sigmoid(x):
+  return 1 / (1 + np.exp(-x.clip(-15, 15)))
 
 proprietes = {}
 data_set = pd.DataFrame()
 answers = pd.Series()
+
+learning_data = pd.DataFrame(columns = ["Generation", "Loss", "Testing"])
+
+def edit_desc(bar, gen, gens, loss, test):
+    bar.desc = f"Processing dataset (Loss: {round(float(loss)*10, 8)}, Gen: {gen}/{gens}, Latest test: {test}%)"
+    learning_data.loc[len(learning_data)] = {"Generation": gen+1, "Loss": (loss*100), "Testing": test}
 
 def get_proprietes():
     global proprietes
@@ -40,13 +47,11 @@ class Layer:
         if self.hidden:
             self.output.clip(0, inplace= True)
         else:
-            self.output = self.output.transpose()
-            self.output = e ** (self.output.transpose() - self.output.max(axis= 1))
-            self.output = (self.output.transpose() / self.output.sum(axis= 1)).T
+            self.output = sigmoid(self.output)
             if learn and not answers.empty:
                 self.output = self.output[pd.get_dummies(answers.transpose())].transpose().max().mean()
             elif not answers.empty:
-                self.output = self.output.max(axis= 1) != self.output[pd.get_dummies(answers.transpose())].transpose().max(axis= 0)
+                self.output = self.output.max(axis= 1) == self.output[pd.get_dummies(answers.transpose())].transpose().max(axis= 0)
 
     def update(self):
         self.weights += pd.DataFrame(np.random.randn(self.weights.shape[0], self.weights.shape[1]) * proprietes["Intensity"])
@@ -101,7 +106,7 @@ def learn():
     pbar = tqdm(desc="Processing dataset", colour='#0997FF', total= (generations * (batch_count - proprietes["Test batch count"])))
     for generation in range(generations):
         for batch in range(batch_count - proprietes["Test batch count"]):
-            pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generation}/{generations}, Latest test: {latest_test}%)"
+            edit_desc(pbar, generation, generations, lowest_loss, latest_test)
             pbar.update(1)
             save_layers()
             loss = run_batch(batch, batch_count, lowest_loss)
@@ -111,7 +116,8 @@ def learn():
                 load_layers()
 
             if round(lowest_loss, 8) == 100000:                
-                pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generation}/{generations}, Latest test: {test()}%)"
+                edit_desc(pbar, generation, generations, lowest_loss, test())
+
                 pbar = None
 
                 print(f"We reached loss = 0.0 So the learning proccess doesn't need to continue. (We were on gen: {generation+1}/{generations}. and on batch {batch+1}/{batch_count - proprietes['Test batch count']}.)")
@@ -122,14 +128,15 @@ def learn():
             elif proprietes["Test frequency (0 => Every gen.)"] == 0:
                 if batch == 0:
                     latest_test = test()
-                    pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generation}/{generations}, Latest test: {latest_test}%)"
+                    edit_desc(pbar, generation, generations, lowest_loss, latest_test)
 
             elif ((generation+1)*batch) % proprietes["Test frequency (0 => Every gen.)"] == 0:
                 latest_test = test()
-                pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generation}/{generations}, Latest test: {latest_test}%)"
+                edit_desc(pbar, generation, generations, lowest_loss, latest_test)
+
 
     latest_test = test()
-    pbar.desc = f"Processing dataset (Loss: {round(float(lowest_loss)*10, 8)}, Gen: {generations}/{generations}, Latest test: {latest_test}%)"
+    edit_desc(pbar, generation, generations, lowest_loss, latest_test)
     return latest_test
 
 def test():
@@ -157,11 +164,17 @@ def test():
             final = layer.output
 
             final = final.sum()/final.size
-    
-    return final*100
+
+    return round(final*100, 2)
 
 
 get_proprietes()
 get_dataset()
 init_layers()
 learn()
+
+
+learning_data.set_index("Generation", drop= True, inplace= True)
+learning_data.plot(ylabel= "Sucsses Rate", yticks= range(101)[::10])
+plt.axhline(50, color = "r", linestyle= "--")
+plt.show()

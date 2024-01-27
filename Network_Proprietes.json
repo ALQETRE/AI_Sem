@@ -1,14 +1,13 @@
 {
     "Data Set": "london_weather",
-    "Data set size (0 => all)": 10000,
-    "Layers": [3, 4, 2],
-    "Input": 8,
-    "Batch Size": 20,
-    "Generations": 1,
-    "Intensity": [0.005, 0.0005, "loss", 0.6],
-    "Drop columns": ["date"],
+    "Data set size (0 => all)": 0,
+    "Layers": [6, 5, 2],
+    "Input": 6,
+    "Batch Size": 32,
+    "Generations": 3,
+    "Intensity": [0.001, 0.0001, "gen"],
+    "Drop columns": ["date", "pressure","snow_depth"],
     "Output": "precipitation",
     "Test batch count": 100,
-    "Test frequency (0 => Every gen.)": 50,
-    "If learn reaches 0 repeat": true
+    "Test frequency (0 => Every gen.)": 10
 }

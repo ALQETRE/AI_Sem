@@ -3,7 +3,7 @@ from json import loads, dumps
 from tqdm import tqdm
 
 percision = 5
-
+ 
 def sigmoid(x):
   return 1 / (1 + np.exp(-x.clip(-15, 15)))
 
@@ -13,13 +13,23 @@ answers = pd.Series()
 
 learning_data = pd.DataFrame(columns = ["Generation", "Loss", "Testing"])
 
+last_gens = 0
+
 def edit_desc(bar, gen, gens, loss, test):
+    global learning_data
+    global last_gens
     bar.desc = f"Processing dataset (Loss: {round(float(loss)*10, percision)}, Gen: {gen}/{gens}, Latest test: {test}%, current intensity: {round(calculate_intensity(gen, loss), 4)}x.) "
-    learning_data.loc[len(learning_data)] = {"Generation": gen+1, "Loss": (loss*100), "Testing": test}
+    
+    if len(learning_data) != 0  and gen == 0 and learning_data.loc[len(learning_data)-1, "Generation"]-last_gens != 0:
+        last_gens += learning_data.loc[len(learning_data)-1, "Generation"]
+        print("added", gen, last_gens, learning_data.loc[len(learning_data)-1, "Generation"])
+
+    learning_data.loc[len(learning_data)] = {"Generation": gen+last_gens, "Loss": (loss*100), "Testing": test}
 
 def plot():
-    learning_data.set_index("Generation", drop= True, inplace= True)
-    learning_data.plot(ylabel= "Sucsses Rate", yticks= range(101)[::10])
+    global learning_data
+    plot_data = learning_data.set_index("Generation", drop= True)
+    plot_data.plot(ylabel= "Sucsses Rate", yticks= range(101)[::10])
     plt.axhline(50, color = "r", linestyle= "--")
     plt.show()
 
@@ -36,15 +46,19 @@ def calculate_intensity(gen, loss):
         inten_step = (max_inten - min_inten) / steps
         return inten_step * (steps - gen)
     elif mode == "loss":
-        steps = intensity_prop[3]
+        steps = intensity_prop[3] / 10
         inten_step = (max_inten - min_inten) / steps
-        return inten_step * loss
+        if (inten_step * loss) == abs(inten_step * loss):
+            return inten_step * loss
+        else:
+            return max_inten
     elif mode == "static":
         return max_inten
 
 
 def get_proprietes():
     global proprietes
+    proprietes = {}
     with open("Network_Proprietes.json") as file:
         proprietes = file.read()
     proprietes = loads(proprietes)
@@ -52,6 +66,9 @@ def get_proprietes():
 def get_dataset():
     global answers
     global data_set
+    data_set = pd.DataFrame()
+    answers = pd.Series()
+
     data_set = pd.read_csv(proprietes["Data Set"] + ".csv")
     if not proprietes["Data set size (0 => all)"] == 0:
         data_set = data_set.head(proprietes["Data set size (0 => all)"])
@@ -62,6 +79,13 @@ def get_dataset():
     data_set.reset_index(inplace= True, drop= True)
     data_set = data_set.transpose()
     data_set.reset_index(inplace= True, drop= True)
+
+
+def reset_plot_data():
+    global learning_data
+    global last_gens
+    last_gens = 0
+    learning_data = pd.DataFrame(columns = ["Generation", "Loss", "Testing"])
     
 class Layer:
     def __init__(self, num_inputs, num_neurons, hidden= True):
@@ -87,6 +111,8 @@ class Layer:
         
 layers = []
 def init_layers():
+    global layers
+    layers = []
     inputs = proprietes["Input"]
     for neuron_count, idx in zip(proprietes["Layers"], range(len(proprietes["Layers"]))):
         if not idx+1 == len(proprietes["Layers"]):
@@ -122,14 +148,13 @@ def run_batch(batch_num, batch_count, lowest_loss, gen):
             layer.forward(output, answers= y, learn= True)
             if layer.output >= lowest_loss:
                 for l in layers:
+                    load_layers()
                     l.update(gen, lowest_loss)
                 return None
             else:
                 return layer.output
             
 def learn():
-    global learning_data
-    learning_data = pd.DataFrame(columns = ["Generation", "Loss", "Testing"])
     generations = proprietes["Generations"]
     batch_count = math.floor(data_set.shape[1] / proprietes["Batch Size"])
     lowest_loss = 1
@@ -144,7 +169,6 @@ def learn():
 
             if loss is not None:
                 lowest_loss = loss
-                load_layers()
 
             if round(lowest_loss, percision) == 0:                
                 edit_desc(pbar, generation, generations, lowest_loss, test())
@@ -153,7 +177,6 @@ def learn():
 
                 print(f"We reached loss = 0.0 So the learning proccess doesn't need to continue. (We were on gen: {generation+1}/{generations}. and on batch {batch+1}/{batch_count - proprietes['Test batch count']}.)")
                 
-                print("\n")
                 return False
             
             elif proprietes["Test frequency (0 => Every gen.)"] == 0:
@@ -202,24 +225,19 @@ def test():
 while True:
     print("\n---\n")
 
-    command = input("Enter command: ")
+    command = input("Console -> ")
     command = command.lower()
 
     print()
 
-    if command in ["run"]:
+    if command in ["run", "r"]:
         get_proprietes()
         get_dataset()
         init_layers()
+        reset_plot_data()
         learn()
     elif command in ["learn", "l"]:
-        run_learn = True
-        while run_learn:
-            if ( not learn() ) and proprietes["If learn reaches 0 repeat"]:
-                print("\nWe started learn process again\n")
-                run_learn = True
-            else:
-                run_learn = False
+        learn()
     elif command in ["plot", "p"]:
         plot()
     elif command in ["get prop", "gp"]:
@@ -236,14 +254,9 @@ while True:
         print("All commands:\n - run (Resers everithing and learns.)\n - learn/l (Starts learning process.)\n - loop learn;'and a number of iterations'/ll;'and a number of iterations' (Runs learn many times.)\n - plot/p (Plots loss and tests against generations.)\n - get prop/gp (Reloads/loads proprietes.)\n - reload/r (Creates/resets the neural network.)\n - update data/uds (Gets data from data set.)\n - prep/pr (Prepear for learning.)")
     elif command.startswith("loop learn;") or command.startswith("ll;"):
         for i in range(int(command[command.index(";")+1:])):
-            print(f"\n - We are running learn process for {i+1}. time. ->")
-            run_learn = True
-            while run_learn:
-                    if ( not learn() ) and proprietes["If learn reaches 0 repeat"]:
-                        print("\nWe started learn process again\n")
-                        run_learn = True
-                    else:
-                        run_learn = False
+            print(f"\n - We are running learn process for {i+1}. time:")
+            learn()
+
     elif command in ["prep", "pr"]:
         get_proprietes()
         print("Proprietes were loaded sucsessfuly.")
@@ -251,6 +264,9 @@ while True:
         print("Layers were initilazed sucsessfuly.")
         init_layers()
         print("Data set was loaded sucsessfuly.")
+
+    elif command in ["reset plot", "rp"]:
+        reset_plot_data()
 
     else:
         print("Error: non existing command. (Type: Help)")

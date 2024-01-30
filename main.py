@@ -15,16 +15,16 @@ learning_data = pd.DataFrame(columns = ["Generation", "Loss", "Testing"])
 
 last_gens = 0
 
-def edit_desc(bar, gen, gens, loss, test):
+def edit_desc(bar, gen, gens, loss, test, append_to_data = True):
     global learning_data
     global last_gens
     bar.desc = f"Processing dataset (Loss: {round(float(loss)*10, percision)}, Gen: {gen}/{gens}, Latest test: {test}%, current intensity: {round(calculate_intensity(gen, loss), 4)}x.) "
     
-    if len(learning_data) != 0  and gen == 0 and learning_data.loc[len(learning_data)-1, "Generation"]-last_gens != 0:
-        last_gens += learning_data.loc[len(learning_data)-1, "Generation"]
-        print("added", gen, last_gens, learning_data.loc[len(learning_data)-1, "Generation"])
+    if append_to_data:
+        if len(learning_data) != 0  and gen == 0 and learning_data.loc[len(learning_data)-1, "Generation"]-last_gens != 0:
+            last_gens = learning_data.loc[len(learning_data)-1, "Generation"]
 
-    learning_data.loc[len(learning_data)] = {"Generation": gen+last_gens, "Loss": (loss*100), "Testing": test}
+        learning_data.loc[len(learning_data)] = {"Generation": gen+last_gens, "Loss": (loss*100), "Testing": test}
 
 def plot():
     global learning_data
@@ -190,7 +190,7 @@ def learn():
 
 
     latest_test = test()
-    edit_desc(pbar, generations, generations, lowest_loss, latest_test)
+    edit_desc(pbar, generations, generations, lowest_loss, latest_test, append_to_data= False)
     return True
 
 def test():
